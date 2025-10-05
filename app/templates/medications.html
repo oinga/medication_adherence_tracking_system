@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<style>
+  /* Make the selected (clicked) one stand out slightly */
+  .selected-today { border-width: 2px !important; }
+  /* Soft fade used for filled/disabled look */
+  .opacity-65 { opacity: .65 !important; }
+</style>
+
+{% if patient %}
+  <div class="d-flex justify-content-between align-items-end mb-3">
+    <div>
+      <h3 class="mb-1">Your Medications</h3>
+      <div class="text-muted">Welcome, {{ patient.first_name }} {{ patient.last_name }}</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('main.request_callback') }}">Request Callback</a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('main.dose_history') }}">Dose History</a>
+    </div>
+  </div>
+
+  {% if total == 0 %}
+    <div class="alert alert-info text-center">No prescriptions on file yet.</div>
+  {% else %}
+    <div class="table-responsive">
+      <table class="table table-striped align-middle">
+        <thead>
+          <tr>
+            <th>Medication</th>
+            <th>Dosage</th>
+            <th>Frequency/day</th>
+            <th>Start</th>
+            <th>End</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rx, med in items %}
+          {% set logged = has_logged_today.get(rx.id) %}
+          {% set active = active_today.get(rx.id) %}
+          {% set clicked = clicked_today.get(rx.id) %}
+          <tr>
+            <td>
+              {{ med.name }}
+              {% if med.strength %}<span class="text-muted">({{ med.strength }})</span>{% endif %}
+            </td>
+            <td>{{ rx.dosage }}</td>
+            <td>{{ rx.frequency_per_day }}</td>
+            <td>{{ rx.start_date }}</td>
+            <td>{{ rx.end_date or '-' }}</td>
+            <td>
+              <div class="d-flex gap-2 justify-content-end">
+
+                {# ===================== TAKEN TODAY ===================== #}
+                <form method="post" action="{{ url_for('main.meds_take', rx_id=rx.id, page=page) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button
+                    class="btn btn-sm
+                      {# Case A: not active today -> filled green faded (disabled) #}
+                      {% if not active %}btn-success disabled opacity-65
+                      {# Case B: already logged today as TAKEN -> filled green faded (disabled + selected) #}
+                      {% elif logged and clicked == 'taken' %}btn-success disabled opacity-65 selected-today
+                      {# Case C: already logged today as MISSED -> outline green but disabled #}
+                      {% elif logged and clicked == 'missed' %}btn-outline-success disabled
+                      {# Case D: active & not logged -> outline green enabled #}
+                      {% else %}btn-outline-success{% endif %}"
+                    type="submit"
+                    {% if not active or logged %}disabled{% endif %}
+                    title="{% if not active %}Prescription not active today{% elif logged %}Already logged today{% else %}Mark as taken today{% endif %}">
+                    Taken Today
+                  </button>
+                </form>
+
+                {# ===================== MISSED TODAY ===================== #}
+                <form method="post" action="{{ url_for('main.meds_miss', rx_id=rx.id, page=page) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button
+                    class="btn btn-sm
+                      {# Case A: not active today -> filled grey faded (disabled) #}
+                      {% if not active %}btn-secondary disabled opacity-65
+                      {# Case B: already logged today as MISSED -> filled grey faded (disabled + selected) #}
+                      {% elif logged and clicked == 'missed' %}btn-secondary disabled opacity-65 selected-today
+                      {# Case C: already logged today as TAKEN -> outline grey but disabled #}
+                      {% elif logged and clicked == 'taken' %}btn-outline-secondary disabled
+                      {# Case D: active & not logged -> outline grey enabled #}
+                      {% else %}btn-outline-secondary{% endif %}"
+                    type="submit"
+                    {% if not active or logged %}disabled{% endif %}
+                    title="{% if not active %}Prescription not active today{% elif logged %}Already logged today{% else %}Mark as missed today{% endif %}">
+                    Missed Today
+                  </button>
+                </form>
+
+                {# ===================== REMINDER ===================== #}
+                {% if rx.reminder_enabled %}
+                  {# Reminder set -> filled blue faded (disabled + selected) #}
+                  <button class="btn btn-sm btn-primary disabled opacity-65 selected-today" title="Reminder set">
+                    Reminder Set for: {{ med.name }}
+                  </button>
+                {% else %}
+                  <form method="post" action="{{ url_for('main.meds_reminder', rx_id=rx.id, page=page) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button
+                      class="btn btn-sm
+                        {# Disabled (not active) -> filled blue faded #}
+                        {% if not active %}btn-primary disabled opacity-65
+                        {# Active -> outline blue enabled #}
+                        {% else %}btn-outline-primary{% endif %}"
+                      type="submit"
+                      {% if not active %}disabled{% endif %}
+                      title="{% if not active %}Prescription not active today{% else %}Set a reminder{% endif %}">
+                      Reminder?
+                    </button>
+                  </form>
+                {% endif %}
+              </div>
+
+              {% if not active %}
+                <div class="text-muted small text-end mt-1">Not active today (check start/end dates)</div>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <nav aria-label="pagination">
+      <ul class="pagination justify-content-center">
+        <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('main.medications', page=page-1) }}">Previous</a>
+        </li>
+        {% for p in range(1, pages+1) %}
+          <li class="page-item {% if p == page %}active{% endif %}">
+            <a class="page-link" href="{{ url_for('main.medications', page=p) }}">{{ p }}</a>
+          </li>
+        {% endfor %}
+        <li class="page-item {% if page >= pages %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('main.medications', page=page+1) }}">Next</a>
+        </li>
+      </ul>
+    </nav>
+  {% endif %}
+
+{% else %}
+  <!-- Admin fallback -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Medications</h3>
+    <a href="#" class="btn btn-primary">New Medication</a>
+  </div>
+  <table class="table table-striped">
+    <thead><tr><th>Name</th><th>Strength</th></tr></thead>
+    <tbody>
+    {% for m in medications %}
+      <tr><td>{{ m.name }}</td><td>{{ m.strength }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+
+{% endblock %}

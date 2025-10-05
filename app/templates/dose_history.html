@@ -1,0 +1,19 @@
+
+{% extends 'base.html' %}
+{% block content %}
+<h3 class="mb-3">Dose History</h3>
+<table class="table table-sm">
+  <thead><tr><th>When</th><th>Medication</th><th>Taken?</th><th>Notes</th></tr></thead>
+  <tbody>
+  {% for l in logs %}
+    <tr>
+      <td>{{ l.taken_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      <td>{{ l.prescription.medication.name }}</td>
+      <td>{{ 'Yes' if l.was_taken else 'No' }}</td>
+      <td>{{ l.notes }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<a class="btn btn-secondary" href="{{ url_for('main.medications') }}">Back</a>
+{% endblock %}

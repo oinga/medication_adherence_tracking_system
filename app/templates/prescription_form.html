@@ -1,0 +1,22 @@
+
+{% extends 'base.html' %}
+{% block content %}
+<h3 class="mb-3">{{ title }}</h3>
+<form method="post">
+  {{ form.hidden_tag() }}
+  <div class="row">
+    <div class="col-md-6 mb-3">{{ form.patient_id.label }} {{ form.patient_id(class="form-select") }}</div>
+    <div class="col-md-6 mb-3">{{ form.medication_id.label }} {{ form.medication_id(class="form-select") }}</div>
+  </div>
+  <div class="row">
+    <div class="col-md-6 mb-3">{{ form.dosage.label }} {{ form.dosage(class="form-control") }}</div>
+    <div class="col-md-6 mb-3">{{ form.frequency_per_day.label }} {{ form.frequency_per_day(class="form-control") }}</div>
+  </div>
+  <div class="row">
+    <div class="col-md-6 mb-3">{{ form.start_date.label }} {{ form.start_date(class="form-control") }}</div>
+    <div class="col-md-6 mb-3">{{ form.end_date.label }} {{ form.end_date(class="form-control") }}</div>
+  </div>
+  <div class="mb-3">{{ form.notes.label }} {{ form.notes(class="form-control") }}</div>
+  {{ form.submit(class="btn btn-primary") }}
+</form>
+{% endblock %}

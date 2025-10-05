@@ -1,0 +1,146 @@
+
+{% extends 'base.html' %}
+{% block content %}
+<h3 class="mb-4">Clinic Dashboard</h3>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="text-muted">Patients</div>
+        <div class="h3">{{ patient_count }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="text-muted">Medications</div>
+        <div class="h3">{{ med_count }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="text-muted">Prescriptions</div>
+        <div class="h3">{{ rx_count }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Today’s Dosages -->
+<div class="card shadow-sm mb-4 mt-4">
+  <div class="card-body">
+    <h5 class="card-title mb-3">Today’s Dosages</h5>
+
+    {% if due_today|length == 0 %}
+      <div class="alert alert-info mb-0">No doses due today.</div>
+    {% else %}
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead>
+            <tr>
+              <th>Patient</th>
+              <th>Medication</th>
+              <th>Dosage</th>
+              <th>Freq/day</th>
+              <th class="text-end">Reminder</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for rx, p, m in due_today %}
+            <tr>
+              <td>{{ p.last_name }}, {{ p.first_name }}</td>
+              <td>{{ m.name }}</td>
+              <td>{{ rx.dosage }}</td>
+              <td>{{ rx.frequency_per_day }}</td>
+              <td class="text-end">
+                {% if rx.reminder_last_sent_date == today %}
+                  <button class="btn btn-sm btn-outline-success disabled text-success">Reminder Sent</button>
+                {% else %}
+                  <form method="post" action="{{ url_for('main.clinic_send_reminder', rx_id=rx.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-success" type="submit">Send Reminder</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h5 class="card-title">Recent Dose Activity</h5>
+        <table class="table table-sm align-middle mt-3">
+          <thead><tr><th>Time</th><th>Patient</th><th>Medication</th><th>Status</th></tr></thead>
+          <tbody>
+          {% for l in last_logs %}
+            <tr>
+              <td>{{ l.taken_at.strftime('%Y-%m-%d %H:%M') }}</td>
+              <td>{{ l.prescription.patient.last_name }}, {{ l.prescription.patient.first_name }}</td>
+              <td>{{ l.prescription.medication.name }}</td>
+              <td>
+                {% if l.was_taken %}
+                  <span class="badge bg-success">Taken</span>
+                {% else %}
+                  <span class="badge bg-secondary">Missed</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h5 class="card-title">Adherence (Last 30 Days)</h5>
+        <table class="table table-sm mt-3">
+          <thead><tr><th>Patient</th><th class="text-end">Adherence</th></tr></thead>
+          <tbody>
+          {% for r in rows %}
+            <tr>
+              <td>{{ r.last_name }}, {{ r.first_name }}</td>
+              <td class="text-end">{{ (r.adherence or 0) * 100 | round(1) }}%</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="card shadow-sm mt-4">
+  <div class="card-body">
+    <h5 class="card-title">Recent Prescriptions</h5>
+    <table class="table table-sm align-middle mt-3">
+      <thead><tr><th>Patient</th><th>Medication</th><th>Dosage</th><th>Freq/day</th><th>Start</th></tr></thead>
+      <tbody>
+      {% for rx, p, m in recent_rx %}
+        <tr>
+          <td>{{ p.last_name }}, {{ p.first_name }}</td>
+          <td>{{ m.name }}</td>
+          <td>{{ rx.dosage }}</td>
+          <td>{{ rx.frequency_per_day }}</td>
+          <td>{{ rx.start_date }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

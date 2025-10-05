@@ -1,0 +1,63 @@
+
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3>Patients</h3>
+  <a href="{{ url_for('main.patient_new') }}" class="btn btn-primary">New Patient</a>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <h5 class="card-title mb-3">Find Patient</h5>
+    <form method="post" class="row g-3">
+      {{ lookup_form.hidden_tag() }}
+      <div class="col-sm-4">
+        {{ lookup_form.ssn_last4.label(class="form-label") }}
+        {{ lookup_form.ssn_last4(class="form-control", placeholder="Last 4 digits") }}
+      </div>
+      <div class="col-sm-4">
+        {{ lookup_form.dob.label(class="form-label") }}
+        {{ lookup_form.dob(class="form-control") }}
+      </div>
+      <div class="col-sm-4 d-flex align-items-end">
+        {{ lookup_form.submit(class="btn btn-outline-primary w-100") }}
+      </div>
+    </form>
+
+    {% if matches is defined %}
+      <hr class="my-3">
+      <form method="post" action="{{ url_for('main.open_patient') }}" class="row g-3">
+        <div class="col-sm-8">
+          <label class="form-label">Matching Patients</label>
+          <select class="form-select" name="patient_id">
+            {% if matches %}
+              {% for p in matches %}
+                <option value="{{ p.id }}">{{ p.last_name }}, {{ p.first_name }} — DOB: {{ p.dob }} — SSN: ***-**-{{ p.ssn_last4 or '????' }}</option>
+              {% endfor %}
+            {% else %}
+              <option value="">No matches found</option>
+            {% endif %}
+          </select>
+        </div>
+        <div class="col-sm-4 d-flex align-items-end">
+          <button type="submit" class="btn btn-primary w-100" {% if not matches %}disabled{% endif %}>Open</button>
+        </div>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+<table class="table table-striped">
+  <thead><tr><th>Name</th><th>DOB</th><th>SSN (last 4)</th><th>Actions</th></tr></thead>
+  <tbody>
+  {% for p in patients %}
+    <tr>
+      <td>{{ p.last_name }}, {{ p.first_name }}</td>
+      <td>{{ p.dob or '' }}</td>
+      <td>{{ p.ssn_last4 or '' }}</td>
+      <td><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.patient_edit', pid=p.id) }}">Edit</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

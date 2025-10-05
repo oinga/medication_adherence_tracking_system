@@ -1,0 +1,12 @@
+# Normalize all text files to LF in repo and working tree
+* text=auto eol=lf
+
+# Be explicit for common text types
+*.py  text eol=lf
+*.txt text eol=lf
+*.md  text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.js  text eol=lf
+*.yml text eol=lf
+requirements.txt text eol=lf

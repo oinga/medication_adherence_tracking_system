@@ -1,0 +1,33 @@
+
+{% extends 'base.html' %}
+{% block content %}
+<div class="row">
+  <div class="col-md-5">
+    <h3 class="mb-3">Log Dose</h3>
+    <form method="post">
+      {{ form.hidden_tag() }}
+      <div class="mb-3">{{ form.prescription_id.label }} {{ form.prescription_id(class="form-select") }}</div>
+      <div class="form-check mb-3">{{ form.was_taken(class="form-check-input") }} {{ form.was_taken.label(class="form-check-label") }}</div>
+      <div class="mb-3">{{ form.notes.label }} {{ form.notes(class="form-control") }}</div>
+      {{ form.submit(class="btn btn-primary") }}
+    </form>
+  </div>
+  <div class="col-md-7">
+    <h3 class="mb-3">Recent Logs</h3>
+    <table class="table table-sm">
+      <thead><tr><th>When</th><th>Patient</th><th>Medication</th><th>Taken?</th><th>Notes</th></tr></thead>
+      <tbody>
+      {% for l in logs %}
+        <tr>
+          <td>{{ l.taken_at.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td>{{ l.prescription.patient.last_name }}, {{ l.prescription.patient.first_name }}</td>
+          <td>{{ l.prescription.medication.name }}</td>
+          <td>{{ 'Yes' if l.was_taken else 'No' }}</td>
+          <td>{{ l.notes }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

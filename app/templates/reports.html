@@ -1,0 +1,14 @@
+
+{% extends 'base.html' %}
+{% block content %}
+<h3 class="mb-3">Adherence Reports</h3>
+<table class="table table-bordered">
+  <thead><tr><th>Patient</th><th>Adherence %</th></tr></thead>
+  <tbody>
+    {% for r in data %}
+      <tr><td>{{ r.patient }}</td><td>{{ r.adherence_percent }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p class="text-muted small">Formula: average of dose events marked taken vs total events logged (simple pilot metric).</p>
+{% endblock %}

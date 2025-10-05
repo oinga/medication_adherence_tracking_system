@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6 col-lg-5">
+    <h3 class="mb-3 text-center">LOGIN</h3>
+    <form method="post" novalidate>
+      {{ form.hidden_tag() }}
+
+      <div class="mb-3">
+        {{ form.ssn_full.label(class="form-label") }}
+        {{ form.ssn_full(class="form-control", placeholder="xxx-xx-xxxx", id="ssnInput") }}
+        <div class="form-text">Please Enter Your SSN.</div>
+      </div>
+
+      <div class="mb-3">
+        {{ form.dob.label(class="form-label") }}
+        {{ form.dob(class="form-control") }}
+      </div>
+
+      {{ form.submit(class="btn btn-primary w-100") }}
+    </form>
+    <script>
+      // Lightweight SSN mask: formats as 123-45-6789 while typing (Git Bash-friendly)
+      const el = document.getElementById('ssnInput');
+      if (el) {
+        el.addEventListener('input', () => {
+          const digits = el.value.replace(/\D/g, '').slice(0,9);
+          let out = '';
+          if (digits.length > 5) out = digits.slice(0,3) + '-' + digits.slice(3,5) + '-' + digits.slice(5);
+          else if (digits.length > 3) out = digits.slice(0,3) + '-' + digits.slice(3);
+          else out = digits;
+          el.value = out;
+        });
+      }
+    </script>
+  </div>
+</div>
+{% endblock %}

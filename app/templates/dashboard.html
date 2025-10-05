@@ -1,0 +1,25 @@
+
+{% extends 'base.html' %}
+{% block content %}
+<h3 class="mb-4">Dashboard</h3>
+<div class="row g-3 mb-4">
+  <div class="col-md-4"><div class="card"><div class="card-body"><h5>Patients</h5><div class="display-6">{{ patient_count }}</div></div></div></div>
+  <div class="col-md-4"><div class="card"><div class="card-body"><h5>Medications</h5><div class="display-6">{{ med_count }}</div></div></div></div>
+  <div class="col-md-4"><div class="card"><div class="card-body"><h5>Prescriptions</h5><div class="display-6">{{ rx_count }}</div></div></div></div>
+</div>
+<h5>Recent Doses</h5>
+<table class="table table-sm">
+  <thead><tr><th>When</th><th>Patient</th><th>Medication</th><th>Taken?</th><th>Notes</th></tr></thead>
+  <tbody>
+  {% for l in last10 %}
+    <tr>
+      <td>{{ l.taken_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      <td>{{ l.prescription.patient.last_name }}, {{ l.prescription.patient.first_name }}</td>
+      <td>{{ l.prescription.medication.name }}</td>
+      <td>{{ 'Yes' if l.was_taken else 'No' }}</td>
+      <td>{{ l.notes }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
