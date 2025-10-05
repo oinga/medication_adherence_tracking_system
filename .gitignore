@@ -1,0 +1,47 @@
+# --- Python & Environment ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+.env
+venv/
+ENV/
+env/
+*.egg-info/
+*.egg
+
+# --- Flask / Instance Files ---
+instance/
+*.db
+*.sqlite3
+*.sqlite
+
+# --- IDE / Editor Files ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Test & Reports ---
+tests_report.html
+pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# --- Migrations Cache ---
+migrations/versions/*.pyc
+migrations/__pycache__/
+migrations/*.log
+
+# --- Temporary / Local Data ---
+*.bak
+*.tmp
+*.old
+*.orig
+
+# --- OS / Miscellaneous ---
+*.~lock*
+desktop.ini
