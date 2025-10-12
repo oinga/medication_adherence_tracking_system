@@ -6,25 +6,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MATS</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  {% if url_for %}<link href="{{ url_for('static', filename='styles.css') }}" rel="stylesheet">{% endif %}
+  {% if url_for %}
+  <link href="{{ url_for('static', filename='styles.css') }}" rel="stylesheet">{% endif %}
+  <!-- in <head> -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
+  
+  <!-- before </body> -->
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
 </head>
 <body>
 <nav class="navbar navbar-dark bg-dark navbar-expand">
   <div class="container-fluid">
-    <!-- <a class="navbar-brand" href="{{ url_for('main.patient_login') }}">MATS</a> -->
 
     {% if current_user.is_authenticated %}
-    <!-- Admin navigation appears only when an admin user is logged in -->
-    <div class="navbar-nav">
-      <div class="navbar-nav">
-        <a class="nav-link" href="#">Patients</a>
-        <a class="nav-link" href="#">Medications</a>
-        <a class="nav-link" href="#">New Rx</a>
-        <a class="nav-link" href="#">Dose History</a>
-        <a class="nav-link" href="#">Reports</a>
-      </div>
-    
-    </div>
+  <div class="navbar-nav align-items-center">
+    <a class="nav-link fw-bold mats-logo" href="{{ url_for('main.clinic_dashboard') }}">
+    MATS
+    </a>
+
+    <a class="nav-link" href="{{ url_for('main.patients') }}">Patients</a>
+    <a class="nav-link" href="{{ url_for('main.medications_index') }}">Medications</a>
+    <a class="nav-link" href="{{ url_for('main.dose_logs') }}">Dose Logs</a>
+  </div>
+
     {% endif %}
 
     <!-- Right-side controls -->

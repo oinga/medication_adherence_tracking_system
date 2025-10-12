@@ -9,6 +9,12 @@ class LoginForm(FlaskForm):
     remember = BooleanField("Remember me")
     submit = SubmitField("Sign In")
 
+class UserForm(FlaskForm):
+    username = StringField("Username", validators=[DataRequired(), Length(min=3, max=64)])
+    email    = StringField("Email", validators=[DataRequired(), Email(), Length(max=120)])
+    password = PasswordField("Password", validators=[DataRequired(), Length(min=6, max=128)])
+    submit   = SubmitField("Save")    
+
 class PatientForm(FlaskForm):
     first_name = StringField("First Name", validators=[DataRequired(), Length(max=50)])
     last_name = StringField("Last Name", validators=[DataRequired(), Length(max=50)])

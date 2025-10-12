@@ -1,1 +1,23 @@
 body{background:#0b152033;} .card{box-shadow:0 2px 8px rgba(0,0,0,0.1);}
+
+.mats-logo {
+  background-color: #000;        /* flat black or very dark gray */
+  color: #fff !important;        /* white text */
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 0.4rem 1.2rem;
+  margin-right: 1.5rem;
+  border: 1px solid #000;
+  transition: all 0.25s ease-in-out;
+  border-radius: 0;              /* <- completely square edges */
+}
+
+/* Hover: invert colors (white bg, black text), still square */
+.mats-logo:hover {
+  background-color: #fff !important;
+  color: #000 !important;
+  border-color: #000;
+  text-decoration: none;
+}
