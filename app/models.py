@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from . import db, login_manager
+from datetime import datetime, timedelta
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -59,12 +60,35 @@ class DoseLog(db.Model):
     prescription = db.relationship("Prescription", backref="dose_logs", lazy=True)
 
     @staticmethod
-    def adherence_for_prescription(prescription: "Prescription"):
-        # naive adherence estimate: expected doses vs. taken
+    def adherence_for_prescription(prescription: "Prescription") -> float:
+        # No start date -> no expectation / no score
         if not prescription.start_date:
             return 0.0
-        end = prescription.end_date or datetime.utcnow().date()
-        days = max((end - prescription.start_date).days + 1, 1)
-        expected = days * max(prescription.frequency_per_day, 1)
-        taken = DoseLog.query.filter_by(prescription_id=prescription.id, was_taken=True).count()
-        return (taken / expected) * 100 if expected else 0.0
+
+        # Use today's date, and don't project beyond today
+        today = datetime.utcnow().date()
+        end = prescription.end_date or today
+        end = min(end, today)
+
+        # If the prescription ends before it starts (bad data), short-circuit
+        if end < prescription.start_date:
+            return 0.0
+
+        # Inclusive day count
+        days = (end - prescription.start_date).days + 1
+        freq = prescription.frequency_per_day or 1
+        expected = max(days * max(freq, 1), 0)
+
+        # Build naive UTC bounds [start_dt, end_dt) — end is exclusive, so add a day
+        start_dt = datetime.combine(prescription.start_date, datetime.min.time())
+        end_dt = datetime.combine(end + timedelta(days=1), datetime.min.time())
+
+        # Count only taken doses within the active window
+        taken = DoseLog.query.filter(
+            DoseLog.prescription_id == prescription.id,
+            DoseLog.was_taken.is_(True),
+            DoseLog.taken_at >= start_dt,
+            DoseLog.taken_at <  end_dt,
+        ).count()
+
+        return (taken / expected) * 100.0 if expected else 0.0

@@ -198,6 +198,8 @@ def medications():
 
 @bp.route("/medications/take/<int:rx_id>", methods=["GET", "POST"])
 def meds_take(rx_id):
+    from app.services.adherence import was_taken_in_last_24h  # <-- add this import
+
     active_pid = session.get("active_patient_id")
     if not active_pid:
         flash("Please sign in as a patient.", "warning")
@@ -215,24 +217,24 @@ def meds_take(rx_id):
         flash("This prescription is not active today (start/end date window).", "warning")
         return redirect(url_for("main.medications", page=request.args.get("page", 1)))
 
-    exists = (
-        DoseLog.query
-        .filter(DoseLog.prescription_id == rx_id,
-                func.date(DoseLog.taken_at) == today)
-        .first()
-    )
-    if not exists:
-        log = DoseLog(
-            prescription_id=rx_id,
-            taken_at=datetime.utcnow(),
-            was_taken=True,
-            notes="Taken today"
-        )
-        db.session.add(log)
-        db.session.commit()
+    # rolling 24-hour guard instead of func.date() ---
+    if was_taken_in_last_24h(rx_id):
+        flash("Already logged in the last 24 hours.", "warning")
+        return redirect(url_for("main.medications", page=request.args.get("page", 1)))
 
-    flash("Marked as taken for today.", "success")
+    # If no recent dose, create one ---
+    log = DoseLog(
+        prescription_id=rx_id,
+        taken_at=datetime.utcnow(),
+        was_taken=True,
+        notes="Taken within 24 hours"
+    )
+    db.session.add(log)
+    db.session.commit()
+
+    flash("Marked as taken.", "success")
     return redirect(url_for("main.medications", page=request.args.get("page", 1)))
+
 
 
 @bp.route("/medications/new", methods=["GET", "POST"])
