@@ -1,28 +1,21 @@
-
-from flask import Blueprint, render_template, redirect, url_for, flash, request, session
+from flask import Blueprint, render_template, redirect, url_for, flash, request, session, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
-from .forms import LoginForm, PatientForm, MedicationForm, PrescriptionForm, DoseLogForm, PatientLookupForm, PatientLoginForm
+from .forms import LoginForm, PatientForm, MedicationForm, PrescriptionForm, DoseLogForm, PatientLookupForm, PatientLoginForm, UserForm
 from .models import User, Patient, Medication, Prescription, DoseLog
 from . import db
 from datetime import datetime, timedelta, date
-from sqlalchemy import func, and_
-from werkzeug.security import check_password_hash
-from werkzeug.security import generate_password_hash
-
+from sqlalchemy import func, and_, or_
+from werkzeug.security import check_password_hash, generate_password_hash
 
 bp = Blueprint("main", __name__)
 
 @bp.before_app_request
 def require_auth_or_patient():
-
     allowed = {"main.patient_login", "main.clinic_login", "static"}
-
     if request.endpoint in allowed or request.endpoint is None:
         return
-
     if current_user.is_authenticated or session.get("active_patient_id"):
         return
-
     flash("You are signed out. Please Login", "warning")
     return redirect(url_for("main.patient_login"))
 
@@ -48,32 +41,33 @@ def patient_login():
             flash("Multiple matches found. Please contact support.", "danger")
         else:
             flash("No matching patient. Please check SSN and DOB.", "warning")
-    return render_template("patient_login.html", form=form)    
+    return render_template("patient_login.html", form=form)
 
 @bp.route("/clinic_login", methods=["GET", "POST"])
 def clinic_login():
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data).first()
-        print(form.password.data)
         if user and user.check_password(form.password.data):
             login_user(user, remember=form.remember.data)
             return redirect(url_for("main.clinic_dashboard"))
         flash("Invalid credentials", "danger")
     return render_template("clinic_login.html", form=form)
 
-
 @bp.route("/clinic_dashboard")
 @login_required
 def clinic_dashboard():
-    # --- original dashboard metrics ---
+    # Stats and lists
     patient_count = Patient.query.count()
     med_count = Medication.query.count()
     rx_count = Prescription.query.count()
 
     cutoff = datetime.utcnow() - timedelta(days=30)
     last_logs = (
-        DoseLog.query
+        db.session.query(DoseLog, Patient, Medication, Prescription)
+        .join(Prescription, DoseLog.prescription_id == Prescription.id)
+        .join(Patient, Prescription.patient_id == Patient.id)
+        .join(Medication, Prescription.medication_id == Medication.id)
         .order_by(DoseLog.taken_at.desc())
         .limit(10)
         .all()
@@ -114,24 +108,19 @@ def clinic_dashboard():
         .all()
     )
 
-    # --- NEW: instantiate forms for the modals on this page ---
+    # Forms for modals
     patient_form = PatientForm()
     medication_form = MedicationForm()
     rx_form = PrescriptionForm()
-
-    # If your PrescriptionForm has SelectFields, populate choices BEFORE render
     if hasattr(rx_form, "patient_id"):
         rx_form.patient_id.choices = [
-            (p.id, f"{p.last_name}, {p.first_name}")
-            for p in Patient.query.order_by(Patient.last_name.asc()).all()
+            (p.id, f"{p.last_name}, {p.first_name}") for p in Patient.query.order_by(Patient.last_name.asc()).all()
         ]
     if hasattr(rx_form, "medication_id"):
         rx_form.medication_id.choices = [
-            (m.id, f"{m.name} {m.strength or ''}".strip())
-            for m in Medication.query.order_by(Medication.name.asc()).all()
+            (m.id, f"{m.name} {m.strength or ''}".strip()) for m in Medication.query.order_by(Medication.name.asc()).all()
         ]
-
-    # --- render with everything needed by the template ---
+    user_form = UserForm()
     return render_template(
         "clinic_dashboard.html",
         patient_count=patient_count,
@@ -142,95 +131,51 @@ def clinic_dashboard():
         recent_rx=recent_rx,
         due_today=due_today,
         today=today,
-        # forms for modals
         patient_form=patient_form,
         medication_form=medication_form,
         rx_form=rx_form,
+        user_form=user_form,
     )
 
-
-
-@bp.route("/patients/new", methods=["POST"])
+@bp.route("/users/new", methods=["POST"])
 @login_required
-def patient_new():
-    form = PatientForm()
-
+def user_new():
+    form = UserForm()
     if form.validate_on_submit():
-        p = Patient()
-        form.populate_obj(p)
-
-        # --- Handle SSN securely ---
-        digits = "".join(ch for ch in form.ssn_full.data if ch.isdigit())
-        if len(digits) < 4:
-            flash("Invalid SSN entered.", "warning")
-            return redirect(url_for("main.clinic_dashboard"))
-
-        p.ssn_last4 = digits[-4:]
-        p.ssn_full_hash = generate_password_hash(form.ssn_full.data, method="scrypt")
-
-        db.session.add(p)
-        db.session.commit()
-        flash(f"Patient {p.first_name} {p.last_name} added successfully.", "success")
+        u = User(
+            username=form.username.data.strip(),
+            email=form.email.data.strip(),
+        )
+        u.password_hash = generate_password_hash(form.password.data, method="scrypt")
+        db.session.add(u)
+        try:
+            db.session.commit()
+            flash("Clinician user created.", "success")
+        except Exception:
+            db.session.rollback()
+            flash("Username or email already exists. Please choose another.", "warning")
     else:
-        flash("Please correct the errors in the patient form.", "warning")
-
+        flash("Please fix the errors in the clinician form.", "warning")
     return redirect(url_for("main.clinic_dashboard"))
-
-
-@bp.route("/prescriptions/new", methods=["POST"])
-@login_required
-def prescription_new():
-    form = PrescriptionForm()
-
-    # IMPORTANT: if the form uses SelectField for patient_id / medication_id,
-    # re-populate choices before validate so WTForms can validate data.
-    if hasattr(form, "patient_id"):
-        form.patient_id.choices = [
-            (p.id, f"{p.last_name}, {p.first_name}") for p in Patient.query.order_by(Patient.last_name.asc()).all()
-        ]
-    if hasattr(form, "medication_id"):
-        form.medication_id.choices = [
-            (m.id, f"{m.name} {m.strength or ''}".strip()) for m in Medication.query.order_by(Medication.name.asc()).all()
-        ]
-
-    if form.validate_on_submit():
-        rx = Prescription()
-        form.populate_obj(rx)  # sets patient_id, medication_id, start_date, end_date, etc.
-        db.session.add(rx)
-        db.session.commit()
-        flash("Prescription added.", "success")
-    else:
-        flash("Please fix the errors in the prescription form.", "warning")
-
-    return redirect(url_for("main.clinic_dashboard"))
-
 
 
 @bp.route("/logout")
 def logout():
     if current_user.is_authenticated:
-
         logout_user()
         flash("You have been successfully logged out.", "success")
         return redirect(url_for("main.clinic_login"))
-
     if session.get("active_patient_id"):
-
         session.pop("active_patient_id", None)
         flash("Thank you. You have been successfully logged out.", "success")
         return redirect(url_for("main.patient_login"))
-
-
     flash("You are signed out.", "info")
     return redirect(url_for("main.patient_login"))
-
-
 
 @bp.route("/medications")
 def medications():
     active_pid = session.get("active_patient_id")
     if not active_pid:
-
         items = Medication.query.order_by(Medication.name.asc()).all()
         return render_template("medications.html", medications=items, patient=None, items=[], page=1, pages=1, total=0, per_page=5)
 
@@ -245,7 +190,6 @@ def medications():
 
     total = q.count()
     items = q.limit(per_page).offset((page - 1) * per_page).all()
-
 
     now = datetime.utcnow()
     start_today = datetime(now.year, now.month, now.day)
@@ -284,13 +228,13 @@ def medications():
         has_logged_today=has_logged_today,
         active_today=active_today,
         today=today,
-        clicked_today=clicked_today,   # <<---- pass to template
+        clicked_today=clicked_today,
     )
-
 
 @bp.route("/medications/take/<int:rx_id>", methods=["GET", "POST"])
 def meds_take(rx_id):
-    from app.services.adherence import was_taken_in_last_24h  # <-- add this import
+    # Uses calendar-day active window but prevents double log via last 24h
+    from app.services.adherence import was_taken_in_last_24h
 
     active_pid = session.get("active_patient_id")
     if not active_pid:
@@ -309,12 +253,11 @@ def meds_take(rx_id):
         flash("This prescription is not active today (start/end date window).", "warning")
         return redirect(url_for("main.medications", page=request.args.get("page", 1)))
 
-    # rolling 24-hour guard instead of func.date() ---
+    # NEW: rolling-24h guard
     if was_taken_in_last_24h(rx_id):
         flash("Already logged in the last 24 hours.", "warning")
         return redirect(url_for("main.medications", page=request.args.get("page", 1)))
 
-    # If no recent dose, create one ---
     log = DoseLog(
         prescription_id=rx_id,
         taken_at=datetime.utcnow(),
@@ -327,8 +270,6 @@ def meds_take(rx_id):
     flash("Marked as taken.", "success")
     return redirect(url_for("main.medications", page=request.args.get("page", 1)))
 
-
-
 @bp.route("/medications/new", methods=["GET", "POST"])
 @login_required
 def medication_new():
@@ -338,10 +279,8 @@ def medication_new():
         db.session.add(m)
         db.session.commit()
         flash("Medication saved", "success")
-        return redirect(url_for("main.medications"))
+        return redirect(url_for("main.medications_index"))
     return render_template("medication_form.html", form=form, title="New Medication")
-
-
 
 @bp.post("/medications/miss/<int:rx_id>")
 def meds_miss(rx_id):
@@ -367,7 +306,6 @@ def meds_miss(rx_id):
     flash("Marked as missed for today.", "warning")
     return redirect(url_for("main.medications", page=request.args.get("page", 1)))
 
-
 @bp.post("/medications/reminder/<int:rx_id>")
 def meds_reminder(rx_id):
     active_pid = session.get("active_patient_id")
@@ -387,14 +325,11 @@ def meds_reminder(rx_id):
         return redirect(url_for("main.medications", page=request.args.get("page", 1)))
 
     med = Medication.query.get(rx.medication_id)
-
     rx.reminder_enabled = True
     db.session.commit()
 
     flash(f"Reminder set for: {med.name}", "success")
     return redirect(url_for("main.medications", page=request.args.get("page", 1)))
-
-
 
 @bp.route("/clinic/reminder/<int:rx_id>", methods=["GET", "POST"])
 @login_required
@@ -402,10 +337,8 @@ def clinic_send_reminder(rx_id):
     rx = Prescription.query.get_or_404(rx_id)
     p = Patient.query.get(rx.patient_id)
     m = Medication.query.get(rx.medication_id)
-
     rx.reminder_last_sent_date = date.today()
     db.session.commit()
-
     flash(f"Reminder sent to {p.first_name} {p.last_name} for today's dosage of {m.name}.", "success")
     return redirect(url_for("main.clinic_dashboard"))
 
@@ -416,7 +349,6 @@ def request_callback():
         flash("Please sign in as a patient.", "warning")
         return redirect(url_for("main.patient_login"))
     return render_template("request_callback.html")
-
 
 @bp.route("/dose-history")
 def dose_history():
@@ -430,4 +362,211 @@ def dose_history():
         .order_by(DoseLog.taken_at.desc())
         .all())
     return render_template("dose_history.html", logs=logs)
+
+# ---------- Patients index (DataTables) ----------
+@bp.route("/patients")
+@login_required
+def patients():
+    return render_template("patients.html")
+
+@bp.get("/api/patients")
+@login_required
+def patients_api():
+    draw   = int(request.args.get("draw", 1))
+    start  = int(request.args.get("start", 0))
+    length = int(request.args.get("length", 10))
+    search_value = (request.args.get("search[value]") or "").strip()
+
+    base = Patient.query
+    records_total = base.count()
+
+    if search_value:
+        like = f"%{search_value}%"
+        base = base.filter(
+            or_(
+                Patient.first_name.ilike(like),
+                Patient.last_name.ilike(like),
+                Patient.ssn_last4.ilike(like),
+            )
+        )
+
+    records_filtered = base.count()
+    rows = (base
+            .order_by(Patient.last_name.asc(), Patient.first_name.asc())
+            .offset(start).limit(length).all())
+
+    data = [[
+            f"{p.last_name}, {p.first_name}",
+            p.dob.strftime("%B %d, %Y") if p.dob else "",
+            p.created_at.strftime("%B %d, %Y") if p.created_at else ""
+            ] for p in rows]
+
+
+
+    return jsonify({
+        "draw": draw,
+        "recordsTotal": records_total,
+        "recordsFiltered": records_filtered,
+        "data": data,
+    })
+
+# ---------- Medications index (DataTables) ----------
+@bp.route("/medications/all")
+@login_required
+def medications_index():
+    return render_template("medications_index.html")
+
+@bp.get("/api/medications")
+@login_required
+def medications_api():
+    draw   = int(request.args.get("draw", 1))
+    start  = int(request.args.get("start", 0))
+    length = int(request.args.get("length", 10))
+    search_value = (request.args.get("search[value]") or "").strip()
+
+    base = Medication.query
+    records_total = base.count()
+
+    if search_value:
+        like = f"%{search_value}%"
+        base = base.filter(
+            or_(
+                Medication.name.ilike(like),
+                Medication.strength.ilike(like),
+            )
+        )
+
+    records_filtered = base.count()
+    items = (base
+             .order_by(Medication.name.asc(), Medication.strength.asc())
+             .offset(start).limit(length).all())
+
+    # counts for current page (fast enough)
+    counts = {}
+    if items:
+        ids = [m.id for m in items]
+        results = (db.session.query(Prescription.medication_id, db.func.count(Prescription.id))
+                   .filter(Prescription.medication_id.in_(ids))
+                   .group_by(Prescription.medication_id)
+                   .all())
+        counts = {mid: cnt for (mid, cnt) in results}
+
+    data = [[m.name, m.strength or "", counts.get(m.id, 0)] for m in items]
+
+    return jsonify({
+        "draw": draw,
+        "recordsTotal": records_total,
+        "recordsFiltered": records_filtered,
+        "data": data,
+    })
+
+# ---------- Create via modals ----------
+@bp.route("/patients/new", methods=["POST"])
+@login_required
+def patient_new():
+    form = PatientForm()
+    if form.validate_on_submit():
+        p = Patient()
+        form.populate_obj(p)
+        # full SSN handling
+        if hasattr(form, "ssn_full") and form.ssn_full.data:
+            digits = "".join(ch for ch in form.ssn_full.data if ch.isdigit())
+            p.ssn_last4 = digits[-4:] if len(digits) >= 4 else None
+            p.ssn_full_hash = generate_password_hash(form.ssn_full.data, method="scrypt")
+        db.session.add(p)
+        db.session.commit()
+        flash("Patient added.", "success")
+    else:
+        flash("Please fix the errors in the patient form.", "warning")
+    return redirect(url_for("main.clinic_dashboard"))
+
+@bp.route("/prescriptions/new", methods=["POST"])
+@login_required
+def prescription_new():
+    form = PrescriptionForm()
+    # if SelectFields exist, repopulate choices before validate
+    if hasattr(form, "patient_id"):
+        form.patient_id.choices = [
+            (p.id, f"{p.last_name}, {p.first_name}") for p in Patient.query.order_by(Patient.last_name.asc()).all()
+        ]
+    if hasattr(form, "medication_id"):
+        form.medication_id.choices = [
+            (m.id, f"{m.name} {m.strength or ''}".strip()) for m in Medication.query.order_by(Medication.name.asc()).all()
+        ]
+
+    if form.validate_on_submit():
+        rx = Prescription()
+        form.populate_obj(rx)
+        db.session.add(rx)
+        db.session.commit()
+        flash("Prescription added.", "success")
+    else:
+        flash("Please fix the errors in the prescription form.", "warning")
+    return redirect(url_for("main.clinic_dashboard"))
+
+
+@bp.route("/dose_logs")
+@login_required
+def dose_logs():
+    return render_template("dose_logs.html")
+
+
+@bp.get("/api/dose_logs")
+@login_required
+def dose_logs_api():
+    draw   = int(request.args.get("draw", 1))
+    start  = int(request.args.get("start", 0))
+    length = int(request.args.get("length", 10))
+    search_value = (request.args.get("search[value]") or "").strip()
+
+    base = (
+        db.session.query(DoseLog, Patient, Medication)
+        .join(Prescription, DoseLog.prescription_id == Prescription.id)
+        .join(Patient, Prescription.patient_id == Patient.id)
+        .join(Medication, Prescription.medication_id == Medication.id)
+    )
+
+    records_total = base.count()
+
+    if search_value:
+        like = f"%{search_value}%"
+        base = base.filter(
+            db.or_(
+                Patient.first_name.ilike(like),
+                Patient.last_name.ilike(like),
+                Medication.name.ilike(like),
+                DoseLog.notes.ilike(like)
+            )
+        )
+
+    records_filtered = base.count()
+
+    rows = (
+        base.order_by(DoseLog.taken_at.desc())
+        .offset(start)
+        .limit(length)
+        .all()
+    )
+
+    data = []
+    for log, patient, med in rows:
+        status = (
+            '<span class="badge bg-success">Taken</span>'
+            if log.was_taken else
+            '<span class="badge bg-danger">Missed</span>'
+        )
+        data.append([
+            log.taken_at.strftime("%Y-%m-%d %H:%M:%S"),
+            f"{patient.last_name}, {patient.first_name}",
+            f"{med.name} {med.strength or ''}",
+            status,
+            log.notes or ""
+        ])
+
+    return {
+        "draw": draw,
+        "recordsTotal": records_total,
+        "recordsFiltered": records_filtered,
+        "data": data,
+    }
 

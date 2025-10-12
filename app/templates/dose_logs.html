@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-3">All Dose Logs</h2>
+
+  <div class="table-responsive">
+    <table id="doseLogsTable" class="table table-striped table-sm align-middle" style="width:100%">
+      <thead>
+        <tr>
+          <th>Taken At (UTC)</th>
+          <th>Patient</th>
+          <th>Medication</th>
+          <th>Status</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+$(function () {
+  $('#doseLogsTable').DataTable({
+    processing: true,
+    serverSide: true,
+    ajax: "{{ url_for('main.dose_logs_api') }}",
+    columns: [
+      { title: "Taken At (UTC)" },
+      { title: "Patient" },
+      { title: "Medication" },
+      { title: "Status", orderable: false, searchable: false },
+      { title: "Notes" }
+    ],
+    order: [[0, 'desc']],
+    pageLength: 10,
+    lengthMenu: [5,10,25,50],
+    searchDelay: 300,
+    createdRow: function(row, data, dataIndex) {
+      // allow the HTML badge rendering for status
+      $('td:eq(3)', row).html(data[3]);
+    }
+  });
+});
+</script>
+{% endblock %}

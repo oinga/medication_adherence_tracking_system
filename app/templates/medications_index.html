@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h2 class="mb-0">Medications</h2>
+  </div>
+
+  <div class="table-responsive">
+    <table id="medicationsTable" class="table table-striped table-sm align-middle" style="width:100%">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Strength</th>
+          <th class="text-end">Prescriptions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(function() {
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!window.jQuery || !$.fn.DataTable) {
+      console.warn('DataTables not loaded. Ensure CDN includes are present in base.html.');
+      return;
+    }
+    const table = $('#medicationsTable').DataTable({
+      processing: true,
+      serverSide: true,
+      ajax: {
+        url: "{{ url_for('main.medications_api') }}",
+        type: "GET",
+        error: function(xhr) {
+          console.error('AJAX error loading medications:', xhr.status, xhr.responseText);
+        }
+      },
+      columns: [
+        { title: "Name" },
+        { title: "Strength" },
+        { title: "Prescriptions", className: "text-end" }
+      ],
+      order: [[0, 'asc']],
+      pageLength: 10,
+      lengthMenu: [5,10,25,50],
+      searchDelay: 300
+    });
+
+    // Optional: focus the search box on load
+    setTimeout(() => {
+      const input = document.querySelector('#medicationsTable_filter input');
+      if (input) input.focus();
+    }, 0);
+  });
+})();
+</script>
+{% endblock %}
