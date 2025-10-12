@@ -1,146 +1,255 @@
-
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% block content %}
-<h3 class="mb-4">Clinic Dashboard</h3>
+<div class="container mt-4">
 
-<div class="row g-3 mb-4">
-  <div class="col-md-4">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <div class="text-muted">Patients</div>
-        <div class="h3">{{ patient_count }}</div>
+  <h2 class="mb-4">Clinic Dashboard</h2>
+
+  <!-- Action Buttons -->
+  <div class="d-flex gap-2 mb-3">
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addPatientModal">Add Patient</button>
+    <button class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#addMedicationModal">Add Medication</button>
+    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addPrescriptionModal">Add Prescription</button>
+  </div>
+
+  <!-- Dashboard Stats -->
+  <div class="row text-center mb-4">
+    <div class="col-md-4">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">Patients</h5>
+          <p class="display-6">{{ patient_count }}</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">Medications</h5>
+          <p class="display-6">{{ med_count }}</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">Prescriptions</h5>
+          <p class="display-6">{{ rx_count }}</p>
+        </div>
       </div>
     </div>
   </div>
-  <div class="col-md-4">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <div class="text-muted">Medications</div>
-        <div class="h3">{{ med_count }}</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-4">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <div class="text-muted">Prescriptions</div>
-        <div class="h3">{{ rx_count }}</div>
-      </div>
-    </div>
-  </div>
-</div>
 
-<!-- Today’s Dosages -->
-<div class="card shadow-sm mb-4 mt-4">
-  <div class="card-body">
-    <h5 class="card-title mb-3">Today’s Dosages</h5>
-
-    {% if due_today|length == 0 %}
-      <div class="alert alert-info mb-0">No doses due today.</div>
-    {% else %}
-      <div class="table-responsive">
-        <table class="table table-sm align-middle">
-          <thead>
-            <tr>
-              <th>Patient</th>
-              <th>Medication</th>
-              <th>Dosage</th>
-              <th>Freq/day</th>
-              <th class="text-end">Reminder</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for rx, p, m in due_today %}
-            <tr>
-              <td>{{ p.last_name }}, {{ p.first_name }}</td>
-              <td>{{ m.name }}</td>
-              <td>{{ rx.dosage }}</td>
-              <td>{{ rx.frequency_per_day }}</td>
-              <td class="text-end">
-                {% if rx.reminder_last_sent_date == today %}
-                  <button class="btn btn-sm btn-outline-success disabled text-success">Reminder Sent</button>
-                {% else %}
-                  <form method="post" action="{{ url_for('main.clinic_send_reminder', rx_id=rx.id) }}" class="d-inline">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button class="btn btn-sm btn-outline-success" type="submit">Send Reminder</button>
-                  </form>
-                {% endif %}
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% endif %}
-  </div>
-</div>
-
-
-<div class="row g-4">
-  <div class="col-lg-6">
-    <div class="card shadow-sm h-100">
-      <div class="card-body">
-        <h5 class="card-title">Recent Dose Activity</h5>
-        <table class="table table-sm align-middle mt-3">
-          <thead><tr><th>Time</th><th>Patient</th><th>Medication</th><th>Status</th></tr></thead>
-          <tbody>
-          {% for l in last_logs %}
-            <tr>
-              <td>{{ l.taken_at.strftime('%Y-%m-%d %H:%M') }}</td>
-              <td>{{ l.prescription.patient.last_name }}, {{ l.prescription.patient.first_name }}</td>
-              <td>{{ l.prescription.medication.name }}</td>
-              <td>
-                {% if l.was_taken %}
-                  <span class="badge bg-success">Taken</span>
-                {% else %}
-                  <span class="badge bg-secondary">Missed</span>
-                {% endif %}
-              </td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-  <div class="col-lg-6">
-    <div class="card shadow-sm h-100">
-      <div class="card-body">
-        <h5 class="card-title">Adherence (Last 30 Days)</h5>
-        <table class="table table-sm mt-3">
-          <thead><tr><th>Patient</th><th class="text-end">Adherence</th></tr></thead>
-          <tbody>
-          {% for r in rows %}
-            <tr>
-              <td>{{ r.last_name }}, {{ r.first_name }}</td>
-              <td class="text-end">{{ (r.adherence or 0) * 100 | round(1) }}%</td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</div>
-
-
-<div class="card shadow-sm mt-4">
-  <div class="card-body">
-    <h5 class="card-title">Recent Prescriptions</h5>
-    <table class="table table-sm align-middle mt-3">
-      <thead><tr><th>Patient</th><th>Medication</th><th>Dosage</th><th>Freq/day</th><th>Start</th></tr></thead>
-      <tbody>
-      {% for rx, p, m in recent_rx %}
-        <tr>
-          <td>{{ p.last_name }}, {{ p.first_name }}</td>
-          <td>{{ m.name }}</td>
-          <td>{{ rx.dosage }}</td>
-          <td>{{ rx.frequency_per_day }}</td>
-          <td>{{ rx.start_date }}</td>
-        </tr>
+  <!-- Due Today -->
+  <h4 class="mt-5">Active Prescriptions (Due Today)</h4>
+  <table class="table table-striped table-sm mt-3">
+    <thead>
+      <tr>
+        <th>Patient</th>
+        <th>Medication</th>
+        <th>Start Date</th>
+        <th>End Date</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for rx, patient, med in due_today %}
+      <tr>
+        <td>{{ patient.last_name }}, {{ patient.first_name }}</td>
+        <td>{{ med.name }} {{ med.strength }}</td>
+        <td>{{ rx.start_date }}</td>
+        <td>{{ rx.end_date or '' }}</td>
+      </tr>
       {% endfor %}
-      </tbody>
-    </table>
+    </tbody>
+  </table>
+
+  <!-- Recent Prescriptions -->
+  <h4 class="mt-5">Recent Prescriptions</h4>
+  <table class="table table-striped table-sm mt-3">
+    <thead>
+      <tr>
+        <th>Patient</th>
+        <th>Medication</th>
+        <th>Start Date</th>
+        <th>End Date</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for rx, patient, med in recent_rx %}
+      <tr>
+        <td>{{ patient.last_name }}, {{ patient.first_name }}</td>
+        <td>{{ med.name }} {{ med.strength }}</td>
+        <td>{{ rx.start_date }}</td>
+        <td>{{ rx.end_date or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+</div>
+
+<!-- ===========================
+     ADD PATIENT MODAL
+=========================== -->
+<div class="modal fade" id="addPatientModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('main.patient_new') }}">
+        <div class="modal-header">
+          <h5 class="modal-title">Add Patient</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          {{ patient_form.hidden_tag() }}
+
+          <!-- First Name -->
+          <div class="mb-3">
+            {{ patient_form.first_name.label(class='form-label') }}
+            {{ patient_form.first_name(class='form-control', placeholder='Enter first name') }}
+            {% for err in patient_form.first_name.errors %}
+              <div class="text-danger small">{{ err }}</div>
+            {% endfor %}
+          </div>
+
+          <!-- Last Name -->
+          <div class="mb-3">
+            {{ patient_form.last_name.label(class='form-label') }}
+            {{ patient_form.last_name(class='form-control', placeholder='Enter last name') }}
+            {% for err in patient_form.last_name.errors %}
+              <div class="text-danger small">{{ err }}</div>
+            {% endfor %}
+          </div>
+
+          <!-- DOB -->
+          <div class="mb-3">
+            {{ patient_form.dob.label(class='form-label') }}
+            {{ patient_form.dob(class='form-control', placeholder='YYYY-MM-DD') }}
+            {% for err in patient_form.dob.errors %}
+              <div class="text-danger small">{{ err }}</div>
+            {% endfor %}
+          </div>
+
+          <!-- SSN -->
+          <div class="mb-3">
+            {{ patient_form.ssn_full.label(class='form-label') }}
+            <input
+              type="text"
+              name="ssn_full"
+              id="ssn_full"
+              class="form-control"
+              placeholder="123-45-6789"
+              maxlength="11"
+              pattern="\d{3}-\d{2}-\d{4}"
+              required
+            >
+            <div class="form-text text-muted">
+              Enter SSN as ###-##-#### (stored securely).
+            </div>
+            {% for err in patient_form.ssn_full.errors %}
+              <div class="text-danger small">{{ err }}</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Patient</button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
+
+<!-- ===========================
+     ADD MEDICATION MODAL
+=========================== -->
+<div class="modal fade" id="addMedicationModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('main.medication_new') }}">
+        <div class="modal-header">
+          <h5 class="modal-title">Add Medication</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          {{ medication_form.hidden_tag() }}
+          {% for field in medication_form if field.name not in ['submit', 'csrf_token'] %}
+            <div class="mb-3">
+              {{ field.label(class='form-label') }}
+              {{ field(class='form-control') }}
+              {% for err in field.errors %}
+                <div class="text-danger small">{{ err }}</div>
+              {% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-secondary">Save Medication</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ===========================
+     ADD PRESCRIPTION MODAL
+=========================== -->
+<div class="modal fade" id="addPrescriptionModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('main.prescription_new') }}">
+        <div class="modal-header">
+          <h5 class="modal-title">Add Prescription</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          {{ rx_form.hidden_tag() }}
+          {% for field in rx_form if field.name not in ['submit', 'csrf_token'] %}
+            <div class="mb-3">
+              {{ field.label(class='form-label') }}
+              {% if field.type in ['SelectField', 'QuerySelectField'] %}
+                {{ field(class='form-select') }}
+              {% else %}
+                {{ field(class='form-control') }}
+              {% endif %}
+              {% for err in field.errors %}
+                <div class="text-danger small">{{ err }}</div>
+              {% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success">Save Prescription</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ===========================
+     SSN AUTO-FORMAT SCRIPT
+=========================== -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const ssnField = document.getElementById('ssn_full');
+  if (ssnField) {
+    ssnField.addEventListener('input', function(e) {
+      let val = e.target.value.replace(/\D/g, ''); // digits only
+      if (val.length > 3 && val.length <= 5) {
+        val = val.replace(/^(\d{3})(\d+)/, '$1-$2');
+      } else if (val.length > 5) {
+        val = val.replace(/^(\d{3})(\d{2})(\d+)/, '$1-$2-$3');
+      }
+      e.target.value = val;
+    });
+  }
+});
+</script>
+
 {% endblock %}
