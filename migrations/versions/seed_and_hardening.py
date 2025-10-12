@@ -35,6 +35,12 @@ def upgrade():
             "ALTER TABLE prescription ADD COLUMN reminder_last_sent_date DATE"
         )
 
+    # 1b) Ensure end_date column exists on prescription (safe/idempotent)
+    if not _column_exists(conn, "prescription", "end_date"):
+        conn.exec_driver_sql(
+            "ALTER TABLE prescription ADD COLUMN end_date DATE"
+        )
+
     # 2) Seed a demo patient (idempotent)
     conn.exec_driver_sql(
         """
@@ -67,11 +73,13 @@ def upgrade():
             {"name": name, "strength": strength},
         )
 
-    # 4) Seed demo prescriptions for John Doe (idempotent)
+    # 4) Seed demo prescriptions for John Doe, with end_date = 2026-12-31 (idempotent)
     conn.exec_driver_sql(
         """
-        INSERT INTO prescription (patient_id, medication_id, dosage, frequency_per_day, start_date, notes, reminder_enabled)
-        SELECT p.id, m.id, '1 tab', 1, DATE('now'), 'Seed prescription', 0
+        INSERT INTO prescription (
+            patient_id, medication_id, dosage, frequency_per_day, start_date, end_date, notes, reminder_enabled
+        )
+        SELECT p.id, m.id, '1 tab', 1, DATE('now'), DATE('2026-12-31'), 'Seed prescription', 0
         FROM patient p
         JOIN medication m ON m.name='Lisinopril' AND m.strength='10 mg'
         WHERE p.first_name='John' AND p.last_name='Doe' AND p.ssn_last4='6789'
@@ -83,14 +91,29 @@ def upgrade():
     )
     conn.exec_driver_sql(
         """
-        INSERT INTO prescription (patient_id, medication_id, dosage, frequency_per_day, start_date, notes, reminder_enabled)
-        SELECT p.id, m.id, '1 tab', 1, DATE('now'), 'Seed prescription', 0
+        INSERT INTO prescription (
+            patient_id, medication_id, dosage, frequency_per_day, start_date, end_date, notes, reminder_enabled
+        )
+        SELECT p.id, m.id, '1 tab', 1, DATE('now'), DATE('2026-12-31'), 'Seed prescription', 0
         FROM patient p
         JOIN medication m ON m.name='Metformin' AND m.strength='500 mg'
         WHERE p.first_name='John' AND p.last_name='Doe' AND p.ssn_last4='6789'
           AND NOT EXISTS (
             SELECT 1 FROM prescription pr
             WHERE pr.patient_id = p.id AND pr.medication_id = m.id
+          );
+        """
+    )
+
+    # 4b) Ensure any previously-seeded John Doe prescriptions get an end_date if missing
+    conn.exec_driver_sql(
+        """
+        UPDATE prescription
+        SET end_date = DATE('2026-12-31')
+        WHERE end_date IS NULL
+          AND patient_id IN (
+            SELECT id FROM patient
+            WHERE first_name='John' AND last_name='Doe' AND ssn_last4='6789'
           );
         """
     )
