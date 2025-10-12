@@ -7,6 +7,7 @@ from . import db
 from datetime import datetime, timedelta, date
 from sqlalchemy import func, and_
 from werkzeug.security import check_password_hash
+from werkzeug.security import generate_password_hash
 
 
 bp = Blueprint("main", __name__)
@@ -65,54 +66,145 @@ def clinic_login():
 @bp.route("/clinic_dashboard")
 @login_required
 def clinic_dashboard():
+    # --- original dashboard metrics ---
     patient_count = Patient.query.count()
     med_count = Medication.query.count()
     rx_count = Prescription.query.count()
 
     cutoff = datetime.utcnow() - timedelta(days=30)
-    last_logs = (DoseLog.query
-                 .order_by(DoseLog.taken_at.desc())
-                 .limit(10)
-                 .all())
+    last_logs = (
+        DoseLog.query
+        .order_by(DoseLog.taken_at.desc())
+        .limit(10)
+        .all()
+    )
 
-    rows = (db.session.query(
-                Patient.id,
-                Patient.first_name,
-                Patient.last_name,
-                func.avg(db.case((DoseLog.was_taken == True, 1), else_=0)).label("adherence")
-            )
-            .join(Prescription, Prescription.patient_id == Patient.id)
-            .join(DoseLog, DoseLog.prescription_id == Prescription.id)
-            .filter(DoseLog.taken_at >= cutoff)
-            .group_by(Patient.id)
-            .order_by(func.avg(db.case((DoseLog.was_taken == True, 1), else_=0)).asc())
-            .all())
+    rows = (
+        db.session.query(
+            Patient.id,
+            Patient.first_name,
+            Patient.last_name,
+            func.avg(db.case((DoseLog.was_taken == True, 1), else_=0)).label("adherence")
+        )
+        .join(Prescription, Prescription.patient_id == Patient.id)
+        .join(DoseLog, DoseLog.prescription_id == Prescription.id)
+        .filter(DoseLog.taken_at >= cutoff)
+        .group_by(Patient.id)
+        .order_by(func.avg(db.case((DoseLog.was_taken == True, 1), else_=0)).asc())
+        .all()
+    )
 
-    recent_rx = (db.session.query(Prescription, Patient, Medication)
-                 .join(Patient, Prescription.patient_id == Patient.id)
-                 .join(Medication, Prescription.medication_id == Medication.id)
-                 .order_by(Prescription.id.desc())
-                 .limit(10)
-                 .all())
+    recent_rx = (
+        db.session.query(Prescription, Patient, Medication)
+        .join(Patient, Prescription.patient_id == Patient.id)
+        .join(Medication, Prescription.medication_id == Medication.id)
+        .order_by(Prescription.id.desc())
+        .limit(10)
+        .all()
+    )
 
     today = date.today()
-    due_today = (db.session.query(Prescription, Patient, Medication)
-             .join(Patient, Prescription.patient_id == Patient.id)
-             .join(Medication, Prescription.medication_id == Medication.id)
-             .filter(Prescription.start_date <= today)
-             .filter((Prescription.end_date == None) | (Prescription.end_date >= today))
-             .order_by(Patient.last_name.asc(), Medication.name.asc())
-             .all())
+    due_today = (
+        db.session.query(Prescription, Patient, Medication)
+        .join(Patient, Prescription.patient_id == Patient.id)
+        .join(Medication, Prescription.medication_id == Medication.id)
+        .filter(Prescription.start_date <= today)
+        .filter((Prescription.end_date == None) | (Prescription.end_date >= today))
+        .order_by(Patient.last_name.asc(), Medication.name.asc())
+        .all()
+    )
 
-    return render_template("clinic_dashboard.html",
-                       patient_count=patient_count,
-                       med_count=med_count,
-                       rx_count=rx_count,
-                       last_logs=last_logs,
-                       rows=rows,
-                       recent_rx=recent_rx,
-                       due_today=due_today,
-                       today=today)
+    # --- NEW: instantiate forms for the modals on this page ---
+    patient_form = PatientForm()
+    medication_form = MedicationForm()
+    rx_form = PrescriptionForm()
+
+    # If your PrescriptionForm has SelectFields, populate choices BEFORE render
+    if hasattr(rx_form, "patient_id"):
+        rx_form.patient_id.choices = [
+            (p.id, f"{p.last_name}, {p.first_name}")
+            for p in Patient.query.order_by(Patient.last_name.asc()).all()
+        ]
+    if hasattr(rx_form, "medication_id"):
+        rx_form.medication_id.choices = [
+            (m.id, f"{m.name} {m.strength or ''}".strip())
+            for m in Medication.query.order_by(Medication.name.asc()).all()
+        ]
+
+    # --- render with everything needed by the template ---
+    return render_template(
+        "clinic_dashboard.html",
+        patient_count=patient_count,
+        med_count=med_count,
+        rx_count=rx_count,
+        last_logs=last_logs,
+        rows=rows,
+        recent_rx=recent_rx,
+        due_today=due_today,
+        today=today,
+        # forms for modals
+        patient_form=patient_form,
+        medication_form=medication_form,
+        rx_form=rx_form,
+    )
+
+
+
+@bp.route("/patients/new", methods=["POST"])
+@login_required
+def patient_new():
+    form = PatientForm()
+
+    if form.validate_on_submit():
+        p = Patient()
+        form.populate_obj(p)
+
+        # --- Handle SSN securely ---
+        digits = "".join(ch for ch in form.ssn_full.data if ch.isdigit())
+        if len(digits) < 4:
+            flash("Invalid SSN entered.", "warning")
+            return redirect(url_for("main.clinic_dashboard"))
+
+        p.ssn_last4 = digits[-4:]
+        p.ssn_full_hash = generate_password_hash(form.ssn_full.data, method="scrypt")
+
+        db.session.add(p)
+        db.session.commit()
+        flash(f"Patient {p.first_name} {p.last_name} added successfully.", "success")
+    else:
+        flash("Please correct the errors in the patient form.", "warning")
+
+    return redirect(url_for("main.clinic_dashboard"))
+
+
+@bp.route("/prescriptions/new", methods=["POST"])
+@login_required
+def prescription_new():
+    form = PrescriptionForm()
+
+    # IMPORTANT: if the form uses SelectField for patient_id / medication_id,
+    # re-populate choices before validate so WTForms can validate data.
+    if hasattr(form, "patient_id"):
+        form.patient_id.choices = [
+            (p.id, f"{p.last_name}, {p.first_name}") for p in Patient.query.order_by(Patient.last_name.asc()).all()
+        ]
+    if hasattr(form, "medication_id"):
+        form.medication_id.choices = [
+            (m.id, f"{m.name} {m.strength or ''}".strip()) for m in Medication.query.order_by(Medication.name.asc()).all()
+        ]
+
+    if form.validate_on_submit():
+        rx = Prescription()
+        form.populate_obj(rx)  # sets patient_id, medication_id, start_date, end_date, etc.
+        db.session.add(rx)
+        db.session.commit()
+        flash("Prescription added.", "success")
+    else:
+        flash("Please fix the errors in the prescription form.", "warning")
+
+    return redirect(url_for("main.clinic_dashboard"))
+
+
 
 @bp.route("/logout")
 def logout():

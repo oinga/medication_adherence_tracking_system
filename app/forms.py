@@ -1,7 +1,7 @@
 
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, BooleanField, IntegerField, TextAreaField, DateField, SelectField
-from wtforms.validators import DataRequired, Email, Length, Optional, NumberRange
+from wtforms.validators import DataRequired, Email, Length, Optional, NumberRange, Length, Regexp
 
 class LoginForm(FlaskForm):
     username = StringField("Username", validators=[DataRequired(), Length(max=80)])
@@ -10,11 +10,17 @@ class LoginForm(FlaskForm):
     submit = SubmitField("Sign In")
 
 class PatientForm(FlaskForm):
-    first_name = StringField("First Name", validators=[DataRequired(), Length(max=100)])
-    last_name = StringField("Last Name", validators=[DataRequired(), Length(max=100)])
-    dob = DateField("Date of Birth", validators=[Optional()])
-    ssn_last4 = StringField("SSN (last 4)", validators=[Optional(), Length(min=4, max=4)])
-    submit = SubmitField("Save")
+    first_name = StringField("First Name", validators=[DataRequired(), Length(max=50)])
+    last_name = StringField("Last Name", validators=[DataRequired(), Length(max=50)])
+    dob = DateField("Date of Birth", validators=[DataRequired()])
+    ssn_full = StringField(
+        "Full SSN",
+        validators=[
+            DataRequired(),
+            Regexp(r"^\d{9}$|^\d{3}-\d{2}-\d{4}$", message="Enter SSN as 9 digits or ###-##-####"),
+        ],
+    )
+    submit = SubmitField("Save Patient")
 
 class MedicationForm(FlaskForm):
     name = StringField("Medication Name", validators=[DataRequired(), Length(max=150)])
